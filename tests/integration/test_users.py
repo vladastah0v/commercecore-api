@@ -1,5 +1,6 @@
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
+from datetime import UTC, datetime, timedelta, timezone
 from uuid import UUID
 
 import pytest
@@ -98,3 +99,50 @@ async def test_invalid_role_is_rejected_by_database(user_session: AsyncSession) 
         )
 
     assert "ck_users_user_role" in str(error.value.orig)
+
+
+async def test_default_timestamps_are_timezone_aware_utc(user_session: AsyncSession) -> None:
+    user = User(email="timestamps@example.test", password_hash="hash", full_name="Test User")
+    user_session.add(user)
+    await user_session.flush()
+    user_id = user.id
+    user_session.expunge_all()
+
+    saved_user = await user_session.get(User, user_id)
+    assert saved_user is not None
+    assert saved_user.created_at.utcoffset() == timedelta(0)
+    assert saved_user.updated_at.utcoffset() == timedelta(0)
+    assert await user_session.scalar(text("SHOW TIME ZONE")) == "UTC"
+
+    result = await user_session.execute(
+        text(
+            "SELECT pg_typeof(created_at)::text, pg_typeof(updated_at)::text "
+            "FROM users WHERE id = :user_id"
+        ),
+        {"user_id": user_id},
+    )
+    assert tuple(result.one()) == ("timestamp with time zone", "timestamp with time zone")
+
+
+async def test_timestamp_offsets_preserve_the_same_utc_instants(user_session: AsyncSession) -> None:
+    created_at = datetime(2025, 1, 10, 15, 30, tzinfo=timezone(timedelta(hours=5)))
+    updated_at = datetime(2025, 6, 15, 8, 45, tzinfo=timezone(timedelta(hours=-4)))
+    user = User(
+        email="offsets@example.test",
+        password_hash="hash",
+        full_name="Test User",
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+    user_session.add(user)
+    await user_session.flush()
+    user_id = user.id
+    user_session.expunge_all()
+
+    saved_user = await user_session.get(User, user_id)
+
+    assert saved_user is not None
+    assert saved_user.created_at == created_at.astimezone(UTC)
+    assert saved_user.updated_at == updated_at.astimezone(UTC)
+    assert saved_user.created_at.utcoffset() == timedelta(0)
+    assert saved_user.updated_at.utcoffset() == timedelta(0)
