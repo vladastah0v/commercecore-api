@@ -8,8 +8,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.core.config import get_settings
 from app.core.database import create_database_engine
+from app.core.exceptions import register_exception_handlers
 from app.core.health import check_postgres, check_redis
 from app.core.redis import create_redis_client
+from app.modules.auth.router import router as auth_router
 
 
 @asynccontextmanager
@@ -31,6 +33,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="0.1.0", debug=settings.debug, lifespan=lifespan)
+register_exception_handlers(app)
+app.include_router(auth_router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health", tags=["health"])
