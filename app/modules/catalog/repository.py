@@ -16,3 +16,7 @@ class CategoryRepository:
 
     async def get_by_id(self, category_id: UUID) -> Category | None:
         return await self._session.get(Category, category_id)
+
+    async def save(self, category: Category) -> None:
+        self._session.add(category)
+        await self._session.flush()
