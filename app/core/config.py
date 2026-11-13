@@ -11,6 +11,9 @@ class Settings(BaseSettings):
 
     app_name: str = "CommerceCore API"
     debug: bool = False
+    jwt_secret: SecretStr | None = None
+    access_token_minutes: int = Field(default=15, ge=1)
+    refresh_token_days: int = Field(default=30, ge=1)
     postgres_host: str = "127.0.0.1"
     postgres_port: int = Field(default=5432, ge=1, le=65535)
     postgres_user: str = Field(default="commercecore", validation_alias="POSTGRES_USER")
