@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
-from app.modules.auth.schemas import LoginRequest, RegisterRequest, TokenPair
-from app.modules.auth.service import LoginService, RegistrationService
+from app.modules.auth.schemas import LoginRequest, RefreshTokenRequest, RegisterRequest, TokenPair
+from app.modules.auth.service import LoginService, RefreshService, RegistrationService
 from app.modules.users.schemas import UserRead
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -49,3 +49,31 @@ async def login(
 ) -> TokenPair:
     response.headers["Cache-Control"] = "no-store"
     return await service.login(data)
+
+
+def get_refresh_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> RefreshService:
+    return RefreshService(session, settings)
+
+
+@router.post(
+    "/refresh", response_model=TokenPair, responses={401: {"description": "Invalid token"}}
+)
+async def refresh(
+    data: RefreshTokenRequest,
+    response: Response,
+    service: Annotated[RefreshService, Depends(get_refresh_service)],
+) -> TokenPair:
+    response.headers["Cache-Control"] = "no-store"
+    return await service.refresh(data.refresh_token.get_secret_value())
+
+
+@router.post("/logout", status_code=204, responses={401: {"description": "Invalid token"}})
+async def logout(
+    data: RefreshTokenRequest,
+    service: Annotated[RefreshService, Depends(get_refresh_service)],
+) -> Response:
+    await service.logout(data.refresh_token.get_secret_value())
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})

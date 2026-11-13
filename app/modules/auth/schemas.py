@@ -41,3 +41,9 @@ class TokenPair(BaseModel):
     access_token: str
     refresh_token: str
     token_type: Literal["bearer"] = "bearer"
+
+
+class RefreshTokenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    refresh_token: SecretStr = Field(min_length=1, max_length=8192)

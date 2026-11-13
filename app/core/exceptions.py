@@ -5,12 +5,22 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.modules.auth.exceptions import EmailAlreadyRegisteredError, InvalidCredentialsError
+from app.modules.auth.exceptions import (
+    EmailAlreadyRegisteredError,
+    InvalidCredentialsError,
+    InvalidRefreshTokenError,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(InvalidRefreshTokenError)
+    async def handle_invalid_refresh_token(
+        request: Request, error: InvalidRefreshTokenError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=401, content={"detail": str(error)})
+
     @app.exception_handler(InvalidCredentialsError)
     async def handle_invalid_credentials(
         request: Request, error: InvalidCredentialsError

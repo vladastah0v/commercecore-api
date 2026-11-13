@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from hashlib import sha256
 
 from sqlalchemy.exc import IntegrityError
@@ -5,8 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.security import hash_password, verify_password
-from app.core.tokens import create_access_token, create_refresh_token, decode_token
-from app.modules.auth.exceptions import EmailAlreadyRegisteredError, InvalidCredentialsError
+from app.core.tokens import (
+    InvalidTokenError,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+)
+from app.modules.auth.exceptions import (
+    EmailAlreadyRegisteredError,
+    InvalidCredentialsError,
+    InvalidRefreshTokenError,
+)
 from app.modules.auth.models import RefreshToken
 from app.modules.auth.repository import RefreshTokenRepository
 from app.modules.auth.schemas import LoginRequest, RegisterRequest, TokenPair
@@ -78,3 +88,52 @@ class LoginService:
                 )
             )
         return TokenPair(access_token=access_token, refresh_token=refresh_token)
+
+
+class RefreshService:
+    def __init__(self, session: AsyncSession, settings: Settings) -> None:
+        self._session = session
+        self._settings = settings
+        self._tokens = RefreshTokenRepository(session)
+        self._users = UserRepository(session)
+
+    async def _get_active_token(self, token: str) -> RefreshToken:
+        try:
+            claims = decode_token(token, "refresh", self._settings)
+        except InvalidTokenError:
+            raise InvalidRefreshTokenError from None
+
+        token_hash = sha256(token.encode("utf-8")).hexdigest()
+        stored = await self._tokens.get_for_update(token_hash)
+        if (
+            stored is None
+            or stored.user_id != claims.user_id
+            or stored.revoked_at is not None
+            or stored.expires_at <= datetime.now(UTC)
+        ):
+            raise InvalidRefreshTokenError
+        return stored
+
+    async def refresh(self, token: str) -> TokenPair:
+        async with self._session.begin():
+            stored = await self._get_active_token(token)
+            user = await self._users.get_by_id(stored.user_id)
+            if user is None or not user.is_active:
+                raise InvalidRefreshTokenError
+            access_token = create_access_token(user.id, self._settings)
+            refresh_token = create_refresh_token(user.id, self._settings)
+            claims = decode_token(refresh_token, "refresh", self._settings)
+            stored.revoked_at = datetime.now(UTC)
+            await self._tokens.add(
+                RefreshToken(
+                    user_id=user.id,
+                    token_hash=sha256(refresh_token.encode("utf-8")).hexdigest(),
+                    expires_at=claims.expires_at,
+                )
+            )
+        return TokenPair(access_token=access_token, refresh_token=refresh_token)
+
+    async def logout(self, token: str) -> None:
+        async with self._session.begin():
+            stored = await self._get_active_token(token)
+            stored.revoked_at = datetime.now(UTC)
