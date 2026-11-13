@@ -16,6 +16,12 @@ uv sync --locked
 uv run uvicorn app.main:app --reload
 ```
 
+Для создания таблиц примените миграции отдельной командой:
+
+```bash
+uv run alembic upgrade head
+```
+
 Документация API доступна по адресу <http://127.0.0.1:8000/docs>.
 Эндпоинт `/api/v1/health` проверяет, что приложение отвечает. Эндпоинт
 `/api/v1/health/ready` проверяет подключение к PostgreSQL и Redis и возвращает HTTP 503,
@@ -34,6 +40,15 @@ cp .env.example .env
 ```bash
 docker compose up --build -d
 ```
+
+Примените миграции к базе в Docker:
+
+```bash
+docker compose run --rm api alembic upgrade head
+```
+
+Миграции не выполняются автоматически при старте API. Сейчас создана только таблица
+пользователей; остальные таблицы будут добавлены на следующих этапах.
 
 API доступен по адресу <http://127.0.0.1:8000>, Swagger UI — по адресу
 <http://127.0.0.1:8000/docs>. PostgreSQL и Redis запускаются в отдельных контейнерах,

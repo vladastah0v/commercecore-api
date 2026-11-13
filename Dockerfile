@@ -15,6 +15,8 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 
 COPY --chown=appuser:appuser app/ ./app/
+COPY --chown=appuser:appuser alembic.ini ./
+COPY --chown=appuser:appuser migrations/ ./migrations/
 
 USER appuser
 

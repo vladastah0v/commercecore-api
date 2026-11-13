@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import (
 from app.core.config import Settings
 
 
-def create_database_engine(settings: Settings) -> AsyncEngine:
-    url = URL.create(
+def create_database_url(settings: Settings) -> URL:
+    return URL.create(
         drivername="postgresql+asyncpg",
         username=settings.postgres_user,
         password=settings.postgres_password.get_secret_value(),
@@ -21,7 +21,14 @@ def create_database_engine(settings: Settings) -> AsyncEngine:
         port=settings.postgres_port,
         database=settings.postgres_db,
     )
-    return create_async_engine(url, pool_pre_ping=True, connect_args={"timeout": 3})
+
+
+def create_database_engine(settings: Settings) -> AsyncEngine:
+    return create_async_engine(
+        create_database_url(settings),
+        pool_pre_ping=True,
+        connect_args={"timeout": 3, "server_settings": {"timezone": "UTC"}},
+    )
 
 
 async def get_db_session(request: Request) -> AsyncIterator[AsyncSession]:
