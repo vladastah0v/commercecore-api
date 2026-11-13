@@ -12,11 +12,24 @@ from app.modules.auth.exceptions import (
     InvalidCredentialsError,
     InvalidRefreshTokenError,
 )
+from app.modules.catalog.exceptions import CategoryNotFoundError, CategorySlugConflictError
 
 logger = logging.getLogger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(CategoryNotFoundError)
+    async def handle_category_not_found(
+        request: Request, error: CategoryNotFoundError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(error)})
+
+    @app.exception_handler(CategorySlugConflictError)
+    async def handle_category_slug_conflict(
+        request: Request, error: CategorySlugConflictError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
     @app.exception_handler(AuthenticationRequiredError)
     async def handle_authentication_required(
         request: Request, error: AuthenticationRequiredError
