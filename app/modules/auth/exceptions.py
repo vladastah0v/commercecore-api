@@ -11,3 +11,13 @@ class InvalidCredentialsError(Exception):
 class InvalidRefreshTokenError(Exception):
     def __init__(self) -> None:
         super().__init__("Invalid refresh token.")
+
+
+class AuthenticationRequiredError(Exception):
+    def __init__(self) -> None:
+        super().__init__("Invalid or missing authentication credentials.")
+
+
+class InsufficientPermissionsError(Exception):
+    def __init__(self) -> None:
+        super().__init__("Insufficient permissions.")

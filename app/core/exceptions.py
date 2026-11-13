@@ -6,7 +6,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.modules.auth.exceptions import (
+    AuthenticationRequiredError,
     EmailAlreadyRegisteredError,
+    InsufficientPermissionsError,
     InvalidCredentialsError,
     InvalidRefreshTokenError,
 )
@@ -15,6 +17,22 @@ logger = logging.getLogger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(AuthenticationRequiredError)
+    async def handle_authentication_required(
+        request: Request, error: AuthenticationRequiredError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": str(error)},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    @app.exception_handler(InsufficientPermissionsError)
+    async def handle_insufficient_permissions(
+        request: Request, error: InsufficientPermissionsError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": str(error)})
+
     @app.exception_handler(InvalidRefreshTokenError)
     async def handle_invalid_refresh_token(
         request: Request, error: InvalidRefreshTokenError
