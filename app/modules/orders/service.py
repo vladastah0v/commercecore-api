@@ -14,19 +14,40 @@ from app.modules.orders.exceptions import (
     EmptyCartError,
     IdempotencyConflictError,
     InsufficientStockError,
+    InvalidOrderTransitionError,
     OrderAmountLimitError,
+    OrderNotFoundError,
     OrderProductUnavailableError,
+    StockRestoreError,
 )
-from app.modules.orders.models import Order, OrderItem
+from app.modules.orders.models import Order, OrderItem, OrderStatus
 from app.modules.orders.repository import OrderRepository
 from app.modules.orders.schemas import CheckoutItem, CheckoutRequest, OrderItemRead, OrderRead
 
 MAX_AMOUNT = Decimal("9999999999.99")
+MAX_STOCK = 2147483647
+ALLOWED_TRANSITIONS = {
+    OrderStatus.PENDING: frozenset({OrderStatus.CONFIRMED, OrderStatus.CANCELLED}),
+    OrderStatus.CONFIRMED: frozenset({OrderStatus.COMPLETED, OrderStatus.CANCELLED}),
+    OrderStatus.CANCELLED: frozenset(),
+    OrderStatus.COMPLETED: frozenset(),
+}
 
 
 def cart_fingerprint(items: Sequence[CartItem] | Sequence[CheckoutItem]) -> str:
     contents = sorted((str(item.product_id), item.quantity) for item in items)
     return sha256(json.dumps(contents, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def order_response(order: Order, items: Sequence[OrderItem]) -> OrderRead:
+    return OrderRead(
+        id=order.id,
+        status=order.status,
+        total_amount=order.total_amount,
+        created_at=order.created_at,
+        updated_at=order.updated_at,
+        items=[OrderItemRead.model_validate(item) for item in items],
+    )
 
 
 class CheckoutService:
@@ -37,14 +58,7 @@ class CheckoutService:
 
     async def _response(self, order: Order) -> OrderRead:
         items = await self._orders.get_order_items(order.id)
-        return OrderRead(
-            id=order.id,
-            status=order.status,
-            total_amount=order.total_amount,
-            created_at=order.created_at,
-            updated_at=order.updated_at,
-            items=[OrderItemRead.model_validate(item) for item in items],
-        )
+        return order_response(order, items)
 
     async def checkout(
         self, user_id: UUID, key: str, data: CheckoutRequest
@@ -117,6 +131,56 @@ class CheckoutService:
                 await self._session.rollback()
                 raise IdempotencyConflictError from None
             raise
+        except BaseException:
+            await self._session.rollback()
+            raise
+
+
+class OrderService:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._orders = OrderRepository(session)
+
+    async def list_orders(self, user_id: UUID) -> list[OrderRead]:
+        orders = await self._orders.list_by_user(user_id)
+        items = await self._orders.get_items_for_orders([order.id for order in orders])
+        grouped: dict[UUID, list[OrderItem]] = {order.id: [] for order in orders}
+        for item in items:
+            grouped[item.order_id].append(item)
+        return [order_response(order, grouped[order.id]) for order in orders]
+
+    async def get_order(self, user_id: UUID, order_id: UUID) -> OrderRead:
+        order = await self._orders.get_by_id(order_id, user_id=user_id)
+        if order is None:
+            raise OrderNotFoundError
+        return order_response(order, await self._orders.get_order_items(order.id))
+
+    async def change_status(self, order_id: UUID, new_status: OrderStatus) -> OrderRead:
+        try:
+            order = await self._orders.get_by_id(order_id, lock=True)
+            if order is None:
+                raise OrderNotFoundError
+            if new_status not in ALLOWED_TRANSITIONS[order.status]:
+                raise InvalidOrderTransitionError
+            items = await self._orders.get_order_items(order.id)
+            if new_status == OrderStatus.CANCELLED:
+                quantities: dict[UUID, int] = {}
+                for item in items:
+                    quantities[item.product_id] = quantities.get(item.product_id, 0) + item.quantity
+                products = await self._orders.lock_products(sorted(quantities))
+                if len(products) != len(quantities) or any(
+                    product.stock_quantity + quantities[product.id] > MAX_STOCK
+                    for product in products
+                ):
+                    raise StockRestoreError
+                for product in products:
+                    product.stock_quantity += quantities[product.id]
+            order.status = new_status
+            await self._session.flush()
+            await self._session.refresh(order)
+            result = order_response(order, items)
+            await self._session.commit()
+            return result
         except BaseException:
             await self._session.rollback()
             raise

@@ -24,14 +24,31 @@ from app.modules.orders.exceptions import (
     EmptyCartError,
     IdempotencyConflictError,
     InsufficientStockError,
+    InvalidOrderTransitionError,
     OrderAmountLimitError,
+    OrderNotFoundError,
     OrderProductUnavailableError,
+    StockRestoreError,
 )
 
 logger = logging.getLogger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(OrderNotFoundError)
+    async def handle_order_not_found(request: Request, error: OrderNotFoundError) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(error)})
+
+    @app.exception_handler(InvalidOrderTransitionError)
+    async def handle_order_transition(
+        request: Request, error: InvalidOrderTransitionError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
+    @app.exception_handler(StockRestoreError)
+    async def handle_stock_restore(request: Request, error: StockRestoreError) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
     @app.exception_handler(CartChangedError)
     async def handle_cart_changed(request: Request, error: CartChangedError) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": str(error)})

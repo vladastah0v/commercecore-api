@@ -26,3 +26,18 @@ class CartChangedError(Exception):
 class OrderAmountLimitError(Exception):
     def __init__(self) -> None:
         super().__init__("Order amount exceeds the allowed limit.")
+
+
+class OrderNotFoundError(Exception):
+    def __init__(self) -> None:
+        super().__init__("Order not found.")
+
+
+class InvalidOrderTransitionError(Exception):
+    def __init__(self) -> None:
+        super().__init__("Order status transition is not allowed.")
+
+
+class StockRestoreError(Exception):
+    def __init__(self) -> None:
+        super().__init__("Unable to restore stock for the order.")
