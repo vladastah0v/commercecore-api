@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +11,15 @@ class Settings(BaseSettings):
 
     app_name: str = "CommerceCore API"
     debug: bool = False
+    postgres_host: str = "127.0.0.1"
+    postgres_port: int = Field(default=5432, ge=1, le=65535)
+    postgres_user: str = Field(default="commercecore", validation_alias="POSTGRES_USER")
+    postgres_password: SecretStr = Field(
+        default=SecretStr(""), validation_alias="POSTGRES_PASSWORD"
+    )
+    postgres_db: str = Field(default="commercecore", validation_alias="POSTGRES_DB")
+    redis_host: str = "127.0.0.1"
+    redis_port: int = Field(default=6379, ge=1, le=65535)
 
 
 @lru_cache

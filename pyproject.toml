@@ -4,8 +4,11 @@ version = "0.1.0"
 description = "A modular backend API for an online store."
 requires-python = ">=3.12"
 dependencies = [
+    "asyncpg>=0.30,<1.0",
     "fastapi>=0.115,<1.0",
     "pydantic-settings>=2.0,<3.0",
+    "redis>=5.0,<8.0",
+    "sqlalchemy[asyncio]>=2.0,<3.0",
     "uvicorn[standard]>=0.34,<1.0",
 ]
 

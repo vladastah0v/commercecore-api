@@ -6,16 +6,20 @@
 ## Локальный запуск
 
 Для работы необходимы Python 3.12 и [uv](https://docs.astral.sh/uv/).
-При необходимости скопируйте `.env.example` в `.env` и измените настройки.
+Скопируйте `.env.example` в `.env`, задайте локальный пароль PostgreSQL и запустите
+PostgreSQL и Redis. Для сервисов можно использовать Docker Compose:
 
 ```bash
+cp .env.example .env
+docker compose up -d postgres redis
 uv sync --locked
 uv run uvicorn app.main:app --reload
 ```
 
 Документация API доступна по адресу <http://127.0.0.1:8000/docs>.
-Эндпоинт `/api/v1/health` проверяет, что приложение отвечает; подключение к базе данных
-и Redis пока не настроено.
+Эндпоинт `/api/v1/health` проверяет, что приложение отвечает. Эндпоинт
+`/api/v1/health/ready` проверяет подключение к PostgreSQL и Redis и возвращает HTTP 503,
+если один из сервисов недоступен.
 
 ## Запуск через Docker
 
@@ -33,8 +37,7 @@ docker compose up --build -d
 
 API доступен по адресу <http://127.0.0.1:8000>, Swagger UI — по адресу
 <http://127.0.0.1:8000/docs>. PostgreSQL и Redis запускаются в отдельных контейнерах,
-а данные PostgreSQL сохраняются в именованном томе `postgres_data`. На этом этапе сервисы
-подготовлены, но приложение ещё не подключается к ним.
+а данные PostgreSQL сохраняются в именованном томе `postgres_data`.
 
 Чтобы остановить контейнеры, сохранив данные PostgreSQL:
 
@@ -52,3 +55,16 @@ uv run ruff check .
 uv run ruff format --check .
 uv run pytest
 ```
+
+Интеграционные проверки подключения используют отдельные тестовые PostgreSQL и Redis.
+Для их запуска необходим работающий Docker:
+
+```bash
+docker compose -p commercecore-test -f docker-compose.test.yml up -d --wait
+COMMERCECORE_RUN_INFRA_TESTS=1 uv run pytest
+docker compose -p commercecore-test -f docker-compose.test.yml down --volumes
+```
+
+Тестовые сервисы используют порты `55432` и `56379` и отдельную базу
+`commercecore_test`. Без `COMMERCECORE_RUN_INFRA_TESTS=1` интеграционные проверки
+пропускаются. Команда `down --volumes` удаляет данные тестового проекта.
