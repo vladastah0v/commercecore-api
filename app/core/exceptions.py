@@ -19,11 +19,51 @@ from app.modules.catalog.exceptions import (
     ProductNotFoundError,
     ProductSlugConflictError,
 )
+from app.modules.orders.exceptions import (
+    CartChangedError,
+    EmptyCartError,
+    IdempotencyConflictError,
+    InsufficientStockError,
+    OrderAmountLimitError,
+    OrderProductUnavailableError,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(CartChangedError)
+    async def handle_cart_changed(request: Request, error: CartChangedError) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
+    @app.exception_handler(EmptyCartError)
+    async def handle_empty_cart(request: Request, error: EmptyCartError) -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": str(error)})
+
+    @app.exception_handler(IdempotencyConflictError)
+    async def handle_idempotency_conflict(
+        request: Request, error: IdempotencyConflictError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
+    @app.exception_handler(InsufficientStockError)
+    async def handle_insufficient_stock(
+        request: Request, error: InsufficientStockError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
+    @app.exception_handler(OrderProductUnavailableError)
+    async def handle_unavailable_product(
+        request: Request, error: OrderProductUnavailableError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
+    @app.exception_handler(OrderAmountLimitError)
+    async def handle_order_amount_limit(
+        request: Request, error: OrderAmountLimitError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
     @app.exception_handler(CartItemNotFoundError)
     async def handle_cart_item_not_found(
         request: Request, error: CartItemNotFoundError

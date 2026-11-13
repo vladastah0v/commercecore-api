@@ -15,6 +15,7 @@ from app.modules.auth.router import router as auth_router
 from app.modules.cart.router import router as cart_router
 from app.modules.catalog.products_router import router as products_router
 from app.modules.catalog.router import router as catalog_router
+from app.modules.orders.router import router as orders_router
 from app.modules.users.router import router as users_router
 
 
@@ -41,6 +42,7 @@ register_exception_handlers(app)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(cart_router, prefix="/api/v1")
 app.include_router(catalog_router, prefix="/api/v1")
+app.include_router(orders_router, prefix="/api/v1")
 app.include_router(products_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 
