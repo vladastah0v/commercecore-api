@@ -21,7 +21,7 @@ from app.modules.auth.models import RefreshToken
 from app.modules.auth.repository import RefreshTokenRepository
 from app.modules.auth.schemas import LoginRequest, RegisterRequest, TokenPair
 from app.modules.users.models import User, UserRole
-from app.modules.users.repository import UserRepository
+from app.modules.users.repository import UserRepository, is_duplicate_email
 
 
 class RegistrationService:
@@ -42,12 +42,7 @@ class RegistrationService:
             async with self._session.begin():
                 await self._users.add(user)
         except IntegrityError as error:
-            db_error = error.orig
-            cause = db_error.__cause__
-            if (
-                getattr(db_error, "sqlstate", None) == "23505"
-                and getattr(cause, "constraint_name", None) == "ix_users_email"
-            ):
+            if is_duplicate_email(error):
                 raise EmailAlreadyRegisteredError from None
             raise
 
