@@ -6,6 +6,7 @@ from sqlalchemy import Connection
 from app.core.config import get_settings
 from app.core.database import create_database_engine, create_database_url
 from app.core.models import Base
+from app.modules.auth import models as auth_models  # noqa: F401
 from app.modules.users import models as users_models  # noqa: F401
 
 target_metadata = Base.metadata
