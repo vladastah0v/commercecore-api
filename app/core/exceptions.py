@@ -12,6 +12,7 @@ from app.modules.auth.exceptions import (
     InvalidCredentialsError,
     InvalidRefreshTokenError,
 )
+from app.modules.cart.exceptions import CartItemNotFoundError, CartQuantityLimitError
 from app.modules.catalog.exceptions import (
     CategoryNotFoundError,
     CategorySlugConflictError,
@@ -23,6 +24,18 @@ logger = logging.getLogger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(CartItemNotFoundError)
+    async def handle_cart_item_not_found(
+        request: Request, error: CartItemNotFoundError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(error)})
+
+    @app.exception_handler(CartQuantityLimitError)
+    async def handle_cart_quantity_limit(
+        request: Request, error: CartQuantityLimitError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(error)})
+
     @app.exception_handler(ProductNotFoundError)
     async def handle_product_not_found(
         request: Request, error: ProductNotFoundError
