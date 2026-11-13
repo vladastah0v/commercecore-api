@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator
 
 
@@ -21,3 +23,21 @@ class RegisterRequest(BaseModel):
         if isinstance(value, str):
             return value.strip()
         return value
+
+
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    email: EmailStr
+    password: SecretStr = Field(max_length=128)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: object) -> object:
+        return RegisterRequest.normalize_email(value)
+
+
+class TokenPair(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: Literal["bearer"] = "bearer"

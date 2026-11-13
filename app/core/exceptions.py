@@ -5,12 +5,18 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.modules.auth.exceptions import EmailAlreadyRegisteredError
+from app.modules.auth.exceptions import EmailAlreadyRegisteredError, InvalidCredentialsError
 
 logger = logging.getLogger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(InvalidCredentialsError)
+    async def handle_invalid_credentials(
+        request: Request, error: InvalidCredentialsError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=401, content={"detail": str(error)})
+
     @app.exception_handler(EmailAlreadyRegisteredError)
     async def handle_duplicate_email(
         request: Request, error: EmailAlreadyRegisteredError
