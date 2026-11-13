@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="CommerceCore API", version="0.1.0")
+from app.core.config import get_settings
+
+settings = get_settings()
+app = FastAPI(title=settings.app_name, version="0.1.0", debug=settings.debug)
 
 
 @app.get("/api/v1/health", tags=["health"])
