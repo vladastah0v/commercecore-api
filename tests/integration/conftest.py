@@ -8,6 +8,10 @@ from uuid import uuid4
 import asyncpg
 import pytest
 import pytest_asyncio
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.core.config import Settings
+from app.core.database import create_database_engine
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TEST_CONNECTION = {
@@ -73,3 +77,27 @@ def run_alembic() -> Callable[[str, str, str], Awaitable[None]]:
         assert process.returncode == 0, (stdout + stderr).decode(errors="replace")
 
     return run
+
+
+@pytest_asyncio.fixture
+async def db_session(
+    migration_database: str,
+    run_alembic: Callable[[str, str, str], Awaitable[None]],
+    monkeypatch,
+) -> AsyncIterator[AsyncSession]:
+    await run_alembic(migration_database, "upgrade", "head")
+    monkeypatch.setenv("POSTGRES_USER", "commercecore_test")
+    monkeypatch.setenv("POSTGRES_PASSWORD", "test-only-password")
+    monkeypatch.setenv("POSTGRES_DB", migration_database)
+    monkeypatch.setenv("COMMERCECORE_POSTGRES_HOST", "127.0.0.1")
+    monkeypatch.setenv("COMMERCECORE_POSTGRES_PORT", "55432")
+    monkeypatch.setenv("COMMERCECORE_DEBUG", "false")
+    monkeypatch.setenv("COMMERCECORE_REDIS_HOST", "127.0.0.1")
+    monkeypatch.setenv("COMMERCECORE_REDIS_PORT", "56379")
+    engine = create_database_engine(Settings(_env_file=None))
+    try:
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with session_factory() as session:
+            yield session
+    finally:
+        await engine.dispose()
