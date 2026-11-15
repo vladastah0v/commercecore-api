@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr | None = None
     access_token_minutes: int = Field(default=15, ge=1)
     refresh_token_days: int = Field(default=30, ge=1)
+    login_rate_limit: int = Field(default=10, ge=1, le=10000)
+    login_rate_window_seconds: int = Field(default=60, ge=1, le=86400)
     postgres_host: str = "127.0.0.1"
     postgres_port: int = Field(default=5432, ge=1, le=65535)
     postgres_user: str = Field(default="commercecore", validation_alias="POSTGRES_USER")

@@ -8,10 +8,12 @@ from uuid import uuid4
 import asyncpg
 import pytest
 import pytest_asyncio
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.database import create_database_engine
+from app.modules.auth.rate_limit import login_rate_key
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TEST_CONNECTION = {
@@ -95,9 +97,13 @@ async def db_session(
     monkeypatch.setenv("COMMERCECORE_REDIS_HOST", "127.0.0.1")
     monkeypatch.setenv("COMMERCECORE_REDIS_PORT", "56379")
     engine = create_database_engine(Settings(_env_file=None))
+    redis = Redis(host="127.0.0.1", port=56379, decode_responses=True)
     try:
+        await redis.delete(login_rate_key("127.0.0.1"))
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         async with session_factory() as session:
             yield session
     finally:
+        await redis.delete(login_rate_key("127.0.0.1"))
+        await redis.aclose()
         await engine.dispose()

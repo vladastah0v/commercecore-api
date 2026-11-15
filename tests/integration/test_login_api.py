@@ -12,6 +12,7 @@ import app.main as main
 from app.core.config import Settings, get_settings
 from app.core.tokens import decode_token
 from app.modules.auth.models import RefreshToken
+from app.modules.auth.rate_limit import login_rate_key
 from app.modules.users.models import User
 
 pytestmark = pytest.mark.skipif(
@@ -44,6 +45,7 @@ async def test_login_issues_tokens_and_stores_only_refresh_hash(
     )
 
     assert response.status_code == 200
+    assert await main.app.state.redis.get(login_rate_key("127.0.0.1")) == "1"
     assert response.headers["cache-control"] == "no-store"
     body = response.json()
     assert set(body) == {"access_token", "refresh_token", "token_type"}

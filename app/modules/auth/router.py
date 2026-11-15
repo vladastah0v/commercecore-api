@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
+from app.modules.auth.rate_limit import check_login_rate_limit
 from app.modules.auth.schemas import LoginRequest, RefreshTokenRequest, RegisterRequest, TokenPair
 from app.modules.auth.service import LoginService, RefreshService, RegistrationService
 from app.modules.users.schemas import UserRead
@@ -40,7 +41,14 @@ def get_login_service(
 
 
 @router.post(
-    "/login", response_model=TokenPair, responses={401: {"description": "Invalid credentials"}}
+    "/login",
+    response_model=TokenPair,
+    dependencies=[Depends(check_login_rate_limit)],
+    responses={
+        401: {"description": "Invalid credentials"},
+        429: {"description": "Too many login attempts"},
+        503: {"description": "Login temporarily unavailable"},
+    },
 )
 async def login(
     data: LoginRequest,
