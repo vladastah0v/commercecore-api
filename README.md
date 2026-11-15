@@ -1,69 +1,151 @@
 # CommerceCore API
 
-Портфолио-проект: модульный backend интернет-магазина на Python и FastAPI.
-Проект находится на начальном этапе разработки.
+CommerceCore API — портфолио-проект backend интернет-магазина, версия MVP 0.1.0.
+Асинхронный модульный монолит предоставляет API каталога, корзины и заказов.
 
-## Локальный запуск
+**Стек:** Python 3.12, FastAPI, Pydantic, SQLAlchemy и asyncpg, PostgreSQL 16,
+Redis 7, Alembic, JWT, Argon2, Docker Compose, pytest, Ruff и GitHub Actions.
 
-Для работы необходимы Python 3.12 и [uv](https://docs.astral.sh/uv/).
-Скопируйте `.env.example` в `.env`, задайте локальный пароль PostgreSQL и запустите
-PostgreSQL и Redis. Для сервисов можно использовать Docker Compose:
+## Возможности
+
+- Регистрация, вход, обновление и отзыв refresh-токенов; роли `customer`, `manager`, `admin`.
+- Публичный каталог категорий и активных товаров; поиск, фильтрация по категории и цене,
+  сортировка по цене и пагинация. Управление каталогом доступно администратору.
+- Личная корзина и оформление заказа с проверкой остатков и обязательным ключом
+  идемпотентности. Добавление в корзину не резервирует товар.
+- История своих заказов. Менеджер и администратор могут изменять статусы; при отмене
+  остатки возвращаются в рамках транзакции.
+- Команда создания администратора, синтетические seed-данные каталога, проверки
+  доступности PostgreSQL и Redis, тесты и CI.
+
+Код организован по бизнес-модулям `auth`, `users`, `catalog`, `cart`, `orders`;
+общая инфраструктура находится в `app/core`, миграции — в `migrations`, скрипты —
+в `scripts`, тесты — в `tests`. Подробности — в [описании архитектуры](docs/architecture.md).
+
+## Настройка окружения
+
+Нужны Docker и Docker Compose. Для локального запуска API дополнительно нужны Python 3.12
+и [uv](https://docs.astral.sh/uv/). Скопируйте пример настроек:
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres redis
-uv sync --locked
-uv run uvicorn app.main:app --reload
 ```
 
-Для создания таблиц примените миграции отдельной командой:
+Задайте в `.env` собственный `POSTGRES_PASSWORD` и случайный `COMMERCECORE_JWT_SECRET`
+длиной не менее 32 байт. Например, создать значение секрета можно командой
+`openssl rand -hex 32`; вставьте результат в `.env`. Без секрета нужной длины выдача и
+проверка токенов не работают. Файл `.env` не должен попадать в Git.
 
-```bash
-uv run alembic upgrade head
-```
-
-Документация API доступна по адресу <http://127.0.0.1:8000/docs>.
-Эндпоинт `/api/v1/health` проверяет, что приложение отвечает. Эндпоинт
-`/api/v1/health/ready` проверяет подключение к PostgreSQL и Redis и возвращает HTTP 503,
-если один из сервисов недоступен.
+Адреса PostgreSQL и Redis в примере настроены для запуска приложения на хосте;
+Docker Compose передаёт API адреса контейнеров автоматически. Время жизни access- и
+refresh-токенов по умолчанию — 15 минут и 30 дней соответственно.
 
 ## Запуск через Docker
 
-Для запуска необходимы Docker и Docker Compose. Создайте локальный файл настроек:
-
-```bash
-cp .env.example .env
-```
-
-Замените `POSTGRES_PASSWORD` в `.env` на свой пароль для локальной разработки, затем запустите:
-
 ```bash
 docker compose up --build -d
+docker compose run --rm api alembic upgrade head
+docker compose run --rm api python -m scripts.seed
 ```
 
-Примените миграции к базе в Docker:
+Миграции запускаются отдельно и не выполняются автоматически при старте API. Seed-скрипт
+добавляет 5 категорий и 100 синтетических товаров; существующие записи с теми же `slug`
+не изменяются. Повторный запуск не создаёт дубликаты.
+
+Для создания администратора выполните в интерактивном терминале:
 
 ```bash
-docker compose run --rm api alembic upgrade head
+docker compose run --rm api python -m scripts.create_admin
 ```
 
-Миграции не выполняются автоматически при старте API. Сейчас созданы таблицы
-пользователей, refresh-токенов и категорий; остальные таблицы будут добавлены на следующих этапах.
+Скрипт запросит email, имя и пароль с подтверждением; пароль не отображается при вводе.
+Существующий пользователь с тем же email не получит роль администратора автоматически.
 
-API доступен по адресу <http://127.0.0.1:8000>, Swagger UI — по адресу
-<http://127.0.0.1:8000/docs>. PostgreSQL и Redis запускаются в отдельных контейнерах,
-а данные PostgreSQL сохраняются в именованном томе `postgres_data`.
-
-Чтобы остановить контейнеры, сохранив данные PostgreSQL:
+API доступен на <http://127.0.0.1:8000>, Swagger UI — на
+<http://127.0.0.1:8000/docs>. PostgreSQL хранит данные в именованном Docker-томе.
+Чтобы остановить сервисы и сохранить данные:
 
 ```bash
 docker compose down
 ```
 
-Файл `.env` не добавляется в Git. При первом создании тома PostgreSQL использует настройки
-из `.env`; изменение пароля в файле не меняет пароль в уже существующей базе.
+Настройки PostgreSQL применяются при первом создании тома. Изменение пароля в `.env`
+не меняет пароль существующей базы.
 
-## Проверки
+## Локальный запуск API
+
+После настройки `.env` запустите PostgreSQL и Redis через Docker Compose, установите
+зависимости, примените миграции и при необходимости заполните каталог:
+
+```bash
+docker compose up -d postgres redis
+uv sync --locked
+uv run alembic upgrade head
+uv run python -m scripts.seed
+uv run python -m scripts.create_admin
+uv run uvicorn app.main:app --reload
+```
+
+Команда создания администратора интерактивная; её можно пропустить, если управление
+каталогом не требуется. Локальный API и API в Docker используют один порт, поэтому
+для локального варианта сервис `api` в Compose не запускайте.
+
+`GET /api/v1/health` проверяет ответ приложения. `GET /api/v1/health/ready` проверяет
+подключение PostgreSQL и Redis и возвращает HTTP 503, если один из сервисов недоступен.
+
+## Примеры запросов
+
+Примеры рассчитаны на запущенный API и заполненный seed-данными каталог. Пароль ниже —
+только пример для локального тестирования. Регистрируйте нового пользователя с уникальным email.
+
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"buyer@example.com","password":"example-password","full_name":"Покупатель"}'
+
+curl -sS -X POST http://127.0.0.1:8000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"buyer@example.com","password":"example-password"}'
+```
+
+Скопируйте `access_token` из ответа в переменную текущей оболочки. Токен позволяет
+действовать от имени пользователя, поэтому не публикуйте его.
+
+```bash
+ACCESS_TOKEN='вставьте-access-token'
+curl -sS http://127.0.0.1:8000/api/v1/users/me \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+Для поиска товаров:
+
+```bash
+curl -sS -G http://127.0.0.1:8000/api/v1/products \
+  --data-urlencode 'search=лампа' --data-urlencode 'limit=5'
+```
+
+Возьмите `id` товара из ответа, добавьте товар в корзину и оформите заказ:
+
+```bash
+PRODUCT_ID='вставьте-uuid-товара'
+curl -sS -X POST http://127.0.0.1:8000/api/v1/cart/items \
+  -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"product_id\":\"$PRODUCT_ID\",\"quantity\":1}"
+
+curl -sS -X POST http://127.0.0.1:8000/api/v1/orders \
+  -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: example-order-1' \
+  -d "{\"items\":[{\"product_id\":\"$PRODUCT_ID\",\"quantity\":1}]}"
+
+curl -sS http://127.0.0.1:8000/api/v1/orders \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+При оформлении тело запроса должно соответствовать текущей корзине. Повтор запроса с
+тем же ключом и содержимым возвращает тот же заказ; для другого заказа используйте
+новый ключ. Полный список эндпоинтов и схем доступен в Swagger UI.
+
+## Тесты и CI
 
 ```bash
 uv run ruff check .
@@ -71,15 +153,28 @@ uv run ruff format --check .
 uv run pytest
 ```
 
-Интеграционные проверки подключения используют отдельные тестовые PostgreSQL и Redis.
-Для их запуска необходим работающий Docker:
+Для интеграционных тестов нужна отдельная тестовая PostgreSQL и Redis. Они используют
+порты `55432` и `56379`; приложение и рабочая база на портах по умолчанию не затрагиваются.
 
 ```bash
 docker compose -p commercecore-test -f docker-compose.test.yml up -d --wait
-COMMERCECORE_RUN_INFRA_TESTS=1 uv run pytest
+COMMERCECORE_RUN_INFRA_TESTS=1 uv run pytest --cov=app --cov-report=term-missing --cov-fail-under=60
 docker compose -p commercecore-test -f docker-compose.test.yml down --volumes
 ```
 
-Тестовые сервисы используют порты `55432` и `56379` и отдельную базу
-`commercecore_test`. Без `COMMERCECORE_RUN_INFRA_TESTS=1` интеграционные проверки
-пропускаются. Команда `down --volumes` удаляет данные тестового проекта.
+Последняя команда удаляет данные **тестового** проекта. Без переменной
+`COMMERCECORE_RUN_INFRA_TESTS=1` интеграционные тесты пропускаются. GitHub Actions
+запускает проверки стиля, миграции, полный набор тестов с порогом покрытия 60% и
+сборку Docker-образа.
+
+## Ограничения MVP и дальнейшее развитие
+
+В проекте нет frontend, платёжной интеграции и доставки. Redis подключён для проверки
+доступности, кэширование товаров не реализовано. Управление каталогом доступно только
+администратору, а для назначения менеджера отдельного публичного API нет. Проект
+предназначен для демонстрации; перед промышленной эксплуатацией потребуются аудит
+безопасности, развёртывание и наблюдаемость.
+
+В следующих версиях можно добавить платёжные и доставочные интеграции, интерфейс
+управления, управление персоналом и мониторинг. Кэширование каталога имеет смысл
+рассматривать после измерения производительности.
