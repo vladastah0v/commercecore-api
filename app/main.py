@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.core.database import create_database_engine
 from app.core.exceptions import register_exception_handlers
 from app.core.health import check_postgres, check_redis
+from app.core.logging import RequestLoggingMiddleware, configure_logging
 from app.core.redis import create_redis_client
 from app.modules.auth.router import router as auth_router
 from app.modules.cart.router import router as cart_router
@@ -21,6 +22,7 @@ from app.modules.users.router import router as users_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    configure_logging()
     settings = get_settings()
     engine = create_database_engine(settings)
     try:
@@ -38,6 +40,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="0.1.0", debug=settings.debug, lifespan=lifespan)
+app.add_middleware(RequestLoggingMiddleware)
 register_exception_handlers(app)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(cart_router, prefix="/api/v1")
